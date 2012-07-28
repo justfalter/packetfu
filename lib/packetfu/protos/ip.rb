@@ -144,6 +144,23 @@ module PacketFu
 			byte_v_hl = [(self.ip_v << 4) + self.ip_hl].pack("C")
 			byte_v_hl + (self.to_a[2,10].map {|x| x.to_s}.join)
 		end
+    
+		# Reads a buffer to populate the object.
+		def read_buffer(buffer)
+      first_char = buffer.read(1).unpack("C").first
+			self[:ip_v] = first_char >> 4
+			self[:ip_hl] = first_char & 0x0f
+			self[:ip_tos].read(buffer.read(1))
+			self[:ip_len].read(buffer.read(2))
+			self[:ip_id].read(buffer.read(2))
+			self[:ip_frag].read(buffer.read(2))
+			self[:ip_ttl].read(buffer.read(1))
+			self[:ip_proto].read(buffer.read(1))
+			self[:ip_sum].read(buffer.read(2))
+			self[:ip_src].read(buffer.read(4))
+			self[:ip_dst].read(buffer.read(4))
+			self
+		end
 
 		# Reads a string to populate the object.
 		def read(str)
@@ -390,13 +407,20 @@ module PacketFu
 
 		# Creates a new IPPacket object. 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@ip_header = IPHeader.new(args).read(args[:ip])
-			@eth_header.body=@ip_header
-
-			@headers = [@eth_header, @ip_header]
-			super
+			super(args)
 		end
+
+    def init_headers(args = {})
+			eth_header = EthHeader.new(args).read(args[:eth])
+			ip_header = IPHeader.new(args).read(args[:ip])
+      [eth_header, ip_header]
+    end
+
+    def set_headers(h)
+      @eth_header = h[0]
+      @ip_header = h[1]
+      super(h)
+    end
 
 		# Peek provides summary data on packet contents.
 		def peek_format

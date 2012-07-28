@@ -159,16 +159,25 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@ip_header = IPHeader.new(args).read(args[:ip])
-			@ip_header.ip_proto=0x11
-			@udp_header = UDPHeader.new(args).read(args[:icmp])
-			@ip_header.body = @udp_header
-			@eth_header.body = @ip_header
-			@headers = [@eth_header, @ip_header, @udp_header]
-			super
-			udp_calc_sum
+			super(args)
 		end
+
+    def init_headers(args = {})
+			eth_header = EthHeader.new(args).read(args[:eth])
+			ip_header = IPHeader.new(args).read(args[:ip])
+			udp_header = UDPHeader.new(args).read(args[:icmp])
+      [eth_header, ip_header, udp_header]
+    end
+
+    def set_headers(h)
+      @eth_header = h[0]
+      @ip_header = h[1]
+      @udp_header = h[2]
+			@ip_header.ip_proto=0x11
+
+      super(h)
+			udp_calc_sum()
+    end
 
 		# udp_calc_sum() computes the UDP checksum, and is called upon intialization. 
 		# It usually should be called just prior to dropping packets to a file or on the wire. 

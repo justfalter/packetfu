@@ -45,9 +45,18 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@invalid_header = 	(args[:invalid] || InvalidHeader.new)
-			@headers = [@invalid_header]
+      super(args)
 		end
+
+    def init_headers(args = {})
+			invalid_header = 	(args[:invalid] || InvalidHeader.new)
+      [invalid_header]
+    end
+
+    def set_headers(h)
+      @invalid_header = h[0]
+      super(h)
+    end
 	end
 
 end # module PacketFu

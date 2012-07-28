@@ -7,7 +7,7 @@ module PacketFu
 	class Packet
 
 		attr_reader :flavor # Packet Headers are responsible for their own specific flavor methods.
-		attr_accessor :headers # All packets have a header collection, useful for determining protocol trees.
+		attr_reader :headers # All packets have a header collection, useful for determining protocol trees.
 		attr_accessor :iface # Default inferface to send packets to
 		attr_accessor :inspect_style # Default is :dissect, can also be :hex or :default
 
@@ -22,6 +22,18 @@ module PacketFu
 			str.force_encoding "binary" if str.respond_to? :force_encoding
 		end
 
+    # This method finds the most suitable class for parsing packet
+    def self.find_packet_parser(packet=nil, args = {})
+			parse_app = true if(args[:parse_app].nil? or args[:parse_app])
+			force_binary(packet)
+			if parse_app
+				classes = PacketFu.packet_classes.select {|pclass| pclass.can_parse? packet}
+			else
+				classes = PacketFu.packet_classes.select {|pclass| pclass.can_parse? packet}.reject {|pclass| pclass.layer_symbol == :application}
+			end
+			classes.sort {|x,y| x.layer <=> y.layer}.last
+    end
+
 		# Parse() creates the correct packet type based on the data, and returns the apporpiate
 		# Packet subclass object. 
 		#
@@ -33,15 +45,8 @@ module PacketFu
 		#
 		# It is no longer neccisary to manually add packet types here.
 		def self.parse(packet=nil,args={})
-			parse_app = true if(args[:parse_app].nil? or args[:parse_app])
-			force_binary(packet)
-			if parse_app
-				classes = PacketFu.packet_classes.select {|pclass| pclass.can_parse? packet}
-			else
-				classes = PacketFu.packet_classes.select {|pclass| pclass.can_parse? packet}.reject {|pclass| pclass.layer_symbol == :application}
-			end
-			p = classes.sort {|x,y| x.layer <=> y.layer}.last.new
-			parsed_packet = p.read(packet,args)
+      klass = find_packet_parser(packet, args)
+			klass.new.read(packet,args)
 		end
 
 		def handle_is_identity(ptype)
@@ -55,23 +60,23 @@ module PacketFu
 
 		# Get the binary string of the entire packet.
 		def to_s
-			@headers[0].to_s
+			self.headers[0].to_s
 		end
 
 		# In the event of no proper decoding, at least send it to the inner-most header.
 		def write(io)
-			@headers[0].write(io)
+			self.headers[0].write(io)
 		end
 
 		# Get the outermost payload (body) of the packet; this is why all packet headers
 		# should have a body type.
 		def payload
-			@headers.last.body
+			self.headers.last.body
 		end
 
 		# Set the outermost payload (body) of the packet.
 		def payload=(args)
-			@headers.last.body=(args)
+			self.headers.last.body=(args)
 		end
 
 		# Converts a packet to libpcap format. Bit of a hack?
@@ -104,7 +109,7 @@ module PacketFu
 		def to_w(iface=nil)
 			iface = (iface || self.iface || PacketFu::Config.new.config[:iface]).to_s
 			inj = PacketFu::Inject.new(:iface => iface)
-			inj.array = [@headers[0].to_s]
+			inj.array = [self.headers[0].to_s]
 			inj.inject
 		end
 		
@@ -129,7 +134,7 @@ module PacketFu
 			else
 				raise ArgumentError, "Recalculating `#{arg}' unsupported. Try :all"
 			end
-			@headers[0]
+			self.headers[0]
 		end
 
 		# Read() takes (and trusts) the io input and shoves it all into a well-formed Packet.
@@ -195,9 +200,9 @@ module PacketFu
 		#
 		# Each packet type should provide a peek_format.
 		def peek(args={})
-			idx = @headers.reverse.map {|h| h.respond_to? peek_format}.index(true)
+			idx = self.headers.reverse.map {|h| h.respond_to? peek_format}.index(true)
 			if idx
-				@headers.reverse[idx].peek_format
+				self.headers.reverse[idx].peek_format
 			else
 				peek_format
 			end
@@ -309,13 +314,13 @@ module PacketFu
 			case arg
 			when :layers
 				ret = []
-				@headers.size.times do |i|
-					ret << hexify(@headers[i])
+				self.headers.size.times do |i|
+					ret << hexify(self.headers[i])
 				end
 				ret
 			when (0..9)
-				if @headers[arg]
-					hexify(@headers[arg])
+				if self.headers[arg]
+					hexify(self.headers[arg])
 				else
 					nil
 				end
@@ -326,7 +331,7 @@ module PacketFu
 
 		def dissection_table
 			table = []
-			@headers.each_with_index do |header,table_idx|
+			self.headers.each_with_index do |header,table_idx|
 				proto = header.class.name.sub(/^.*::/,"")
 				table << [proto,[]]
 				header.class.members.each do |elem|
@@ -345,8 +350,8 @@ module PacketFu
 				end
 			end
 			table
-			if @headers.last.members.map {|x| x.to_sym }.include? :body
-				body_part = [:body, self.payload, @headers.last.body.class.name]
+			if self.headers.last.members.map {|x| x.to_sym }.include? :body
+				body_part = [:body, self.payload, self.headers.last.body.class.name]
 			end
 			table << body_part
 		end
@@ -467,6 +472,14 @@ module PacketFu
 			if self.class.name =~ /(::|^)PacketFu::Packet$/
 				raise NoMethodError, "method `new' called for abstract class #{self.class.name}"
 			end
+
+      # Initialize headers if they don't already exist
+      if headers = args[:headers]
+        self.set_headers(headers)
+      else
+			  self.set_headers(init_headers(args))
+      end
+
 			@inspect_style = args[:inspect_style] || PacketFu.inspect_style || :dissect
 			if args[:config]
 				args[:config].each_pair do |k,v|
@@ -479,6 +492,27 @@ module PacketFu
 				end
 			end
 		end
+
+    def headers=(new_headers)
+      @headers = new_headers
+    end
+
+    # @param [Hash] args
+    # @return [Array] array of default headers, if none were provided
+    def init_headers(args = {})
+      raise NotImplementedError.new("#{self.class}#init_headers is not implemented!")
+    end
+
+    # Primary interface for setting ethernet headers
+    def set_headers(new_headers)
+      if new_headers.count > 1
+        # Set the body of each of the appropriate headers
+        (new_headers.count - 1).downto(1) do |i|
+          new_headers[i-1].body = new_headers[i]
+        end
+      end
+      @headers = new_headers
+    end
 
 		# Delegate to PacketFu's inspect_style, since the
 		# class variable name is the same. Yay for namespace

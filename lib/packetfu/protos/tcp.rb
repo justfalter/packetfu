@@ -719,6 +719,25 @@ module PacketFu
 			hdr.flatten.join
 		end
 
+		# Reads a buffer to populate the object.
+		def read_buffer(buffer)
+			self[:tcp_src].read(buffer.read(2))
+			self[:tcp_dst].read(buffer.read(2))
+			self[:tcp_seq].read(buffer.read(4))
+			self[:tcp_ack].read(buffer.read(4))
+			self[:tcp_hlen].read(buffer.read(1))
+			self[:tcp_reserved].read(buffer.read(1))
+			self[:tcp_ecn].read(buffer.read(2))
+			self[:tcp_flags].read(buffer.read(1))
+			self[:tcp_win].read(buffer.read(2))
+			self[:tcp_sum].read(buffer.read(2))
+			self[:tcp_urg].read(buffer.read(2))
+			#self[:tcp_opts].read(str[20,((self[:tcp_hlen].to_i * 4) - 20)])
+			self[:tcp_opts].read(buffer.read((self[:tcp_hlen].to_i * 4) - 20))
+			self[:body].read(buffer.read_remaining())
+			self
+		end
+
 		# Reads a string to populate the object.
 		def read(str)
 			force_binary(str)
@@ -992,23 +1011,31 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = 	(args[:eth] || EthHeader.new)
-			@ip_header 	= 	(args[:ip]	|| IPHeader.new)
-			@tcp_header = 	(args[:tcp] || TCPHeader.new)
-			@tcp_header.flavor = args[:flavor].to_s.downcase
+			super(args)
+		end
 
-			@ip_header.body = @tcp_header
-			@eth_header.body = @ip_header
-			@headers = [@eth_header, @ip_header, @tcp_header]
+    def init_headers(args = {})
+			eth_header = 	(args[:eth] || EthHeader.new)
+			ip_header 	= 	(args[:ip]	|| IPHeader.new)
+			tcp_header = 	(args[:tcp] || TCPHeader.new)
+			tcp_header.flavor = args[:flavor].to_s.downcase
+      [eth_header, ip_header, tcp_header]
+    end
 
+    def set_headers(h)
+      @eth_header = h[0]
+      @ip_header = h[1]
+      @tcp_header = h[2]
 			@ip_header.ip_proto=0x06
-			super
-			if args[:flavor]
+
+      super(h)
+
+			if @tcp_header.flavor && @tcp_header.flavor.length > 0
 				tcp_calc_flavor(@tcp_header.flavor)
 			else
 				tcp_calc_sum
 			end
-		end
+    end
 
 		# Sets the correct flavor for TCP Packets. Recognized flavors are:
 		#   windows, linux, freebsd

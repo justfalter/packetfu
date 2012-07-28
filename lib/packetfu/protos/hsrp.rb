@@ -176,17 +176,27 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@ip_header = IPHeader.new(args).read(args[:ip])
-			@ip_header.ip_proto = 0x11
-			@udp_header = UDPHeader.new(args).read(args[:udp])
-			@hsrp_header = HSRPHeader.new(args).read(args[:hsrp])
-			@udp_header.body = @hsrp_header
-			@ip_header.body = @udp_header
-			@eth_header.body = @ip_header
-			@headers = [@eth_header, @ip_header, @udp_header, @hsrp_header]
-			super
+			super(args)
 		end
+
+    def init_headers(args = {})
+			eth_header = EthHeader.new(args).read(args[:eth])
+			ip_header = IPHeader.new(args).read(args[:ip])
+			udp_header = UDPHeader.new(args).read(args[:udp])
+			hsrp_header = HSRPHeader.new(args).read(args[:hsrp])
+      [eth_header, ip_header, udp_header, hsrp_header]
+    end
+
+    def set_headers(h)
+      @eth_header = h[0]
+      @ip_header = h[1]
+      @udp_header = h[2]
+      @hsrp_header = h[3]
+
+			@ip_header.ip_proto = 0x11
+
+      super(h)
+    end
 
 		# Peek provides summary data on packet contents.
 		def peek_format

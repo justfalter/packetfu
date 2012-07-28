@@ -142,17 +142,24 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@ip_header = IPHeader.new(args).read(args[:ip])
-			@ip_header.ip_proto = 1
-			@icmp_header = ICMPHeader.new(args).read(args[:icmp])
-
-			@ip_header.body = @icmp_header
-			@eth_header.body = @ip_header
-
-			@headers = [@eth_header, @ip_header, @icmp_header]
-			super
+			super(args)
 		end
+
+    def init_headers(args = {})
+			eth_header = EthHeader.new(args).read(args[:eth])
+			ip_header = IPHeader.new(args).read(args[:ip])
+			icmp_header = ICMPHeader.new(args).read(args[:icmp])
+      [eth_header, ip_header, icmp_header]
+    end
+
+    def set_headers(h)
+      @eth_header = h[0]
+      @ip_header = h[1]
+      @icmp_header = h[2]
+			@ip_header.ip_proto = 1
+
+      super(h)
+    end
 
 		# Peek provides summary data on packet contents.
 		def peek_format

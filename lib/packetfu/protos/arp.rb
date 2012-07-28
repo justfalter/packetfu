@@ -204,30 +204,40 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@arp_header = ARPHeader.new(args).read(args[:arp]) 
-			@eth_header.eth_proto = "\x08\x06"
-			@eth_header.body=@arp_header
+			super(args)
+		end
+
+    def init_headers(args = {})
+			eth_header = EthHeader.new(args).read(args[:eth])
+			arp_header = ARPHeader.new(args).read(args[:arp]) 
 
 			# Please send more flavors to todb+packetfu@planb-security.net.
 			# Most of these initial fingerprints come from one (1) sample.
 			case (args[:flavor].nil?) ? :nil : args[:flavor].to_s.downcase.intern
-			when :windows; @arp_header.body = "\x00" * 64				# 64 bytes of padding 
-			when :linux; @arp_header.body = "\x00" * 4 +				# 32 bytes of padding 
+			when :windows; arp_header.body = "\x00" * 64				# 64 bytes of padding 
+			when :linux; arp_header.body = "\x00" * 4 +				# 32 bytes of padding 
 				"\x00\x07\x5c\x14" + "\x00" * 4 +
 				"\x00\x0f\x83\x34" + "\x00\x0f\x83\x74" +
 				"\x01\x11\x83\x78" + "\x00\x00\x00\x0c" + 
 				"\x00\x00\x00\x00"
 			when :hp_deskjet; 																	# Pads up to 60 bytes.
-				@arp_header.body = "\xe0\x90\x0d\x6c" + 
+				arp_header.body = "\xe0\x90\x0d\x6c" + 
 				"\xff\xff\xee\xee" + "\x00" * 4 + 
 				"\xe0\x8f\xfa\x18\x00\x20"	
-			else; @arp_header.body = "\x00" * 18								# Pads up to 60 bytes.
+			else; arp_header.body = "\x00" * 18								# Pads up to 60 bytes.
 			end
 
-			@headers = [@eth_header, @arp_header]
-			super
-		end
+      [eth_header, arp_header]
+    end
+
+    def set_headers(h)
+      @eth_header = h[0]
+      @arp_header = h[1]
+
+			@eth_header.eth_proto = "\x08\x06"
+
+      super(h)
+    end
 
 		# Generates summary data for ARP packets.
 		def peek_format
@@ -258,7 +268,7 @@ module PacketFu
 		# While there are lengths in ARPPackets, there's not
 		# much to do with them.
 		def recalc(args={})
-			@headers[0].inspect
+			self.headers[0].inspect
 		end
 
 	end

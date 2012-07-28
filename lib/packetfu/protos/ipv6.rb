@@ -225,13 +225,23 @@ module PacketFu
 		end
 
 		def initialize(args={})
-			@eth_header = (args[:eth] || EthHeader.new)
-			@ipv6_header = (args[:ipv6]	|| IPv6Header.new)
-			@eth_header.eth_proto = 0x86dd
-			@eth_header.body=@ipv6_header
-			@headers = [@eth_header, @ipv6_header]
-			super
+			super(args)
 		end
+
+    def init_headers(args = {})
+			eth_header = (args[:eth] || EthHeader.new)
+			ipv6_header = (args[:ipv6]	|| IPv6Header.new)
+      [eth_header, ipv6_header]
+    end
+
+    # @param [EthHeader] eth_header
+    # @param [IPv6Header] ipv6_header
+    def set_headers(h)
+      @eth_header = h[0]
+      @ipv6_header = h[1]
+      @eth_header.eth_proto = 0x86dd
+      super(h)
+    end
 
 		# Peek provides summary data on packet contents.
 		def peek(args={})

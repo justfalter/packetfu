@@ -174,6 +174,15 @@ module PacketFu
 			self.to_a.map {|x| x.to_s}.join
 		end
 
+		# Reads from a PacketFu::Buffer
+    #
+		def read_buffer(buffer)
+			self[:eth_dst].read(buffer.read(6))
+			self[:eth_src].read(buffer.read(6))
+			self[:eth_proto].read(buffer.read(2))
+			self
+		end
+
 		# Reads a string to populate the object.
 		def read(str)
 			force_binary(str)
@@ -280,14 +289,21 @@ module PacketFu
 		# Does nothing, really, since there's no length or
 		# checksum to calculate for a straight Ethernet packet.
 		def recalc(args={})
-			@headers[0].inspect
+			self.headers[0].inspect
 		end
 
 		def initialize(args={})
-			@eth_header = EthHeader.new(args).read(args[:eth])
-			@headers = [@eth_header]
-			super
+			super(args)
 		end
+
+    def init_headers(args)
+      [EthHeader.new(args).read(args[:eth])]
+    end
+
+    def set_headers(h)
+			@eth_header = h[0]
+      super(h)
+    end
 
 	end
 
